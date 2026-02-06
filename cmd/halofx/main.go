@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+
+	"github.com/devanshu0x/halofx/internal/render"
 	"github.com/devanshu0x/halofx/internal/ui"
 )
 
@@ -38,6 +40,8 @@ func main() {
 		ui.Info("halofx version: " + version)
 		os.Exit(0)
 	}
+	var inputPath ,outputPath string
+
 	if *input == "" {
 		ui.Error("Input file is required, specify with -i flag")
 		os.Exit(1)
@@ -47,8 +51,8 @@ func main() {
 		ui.Error(fmt.Sprintf("Error with input file: %v", err.Error()))
 		os.Exit(1)
 	}
-
-	var outputPath string
+	inputPath = *input
+	
 	if *output == "" {
 		outputPath = fmt.Sprintf("%s_halofx%s", (*input)[:len(*input)-len(filepath.Ext(*input))], filepath.Ext(*input))
 	} else {
@@ -58,9 +62,9 @@ func main() {
 			os.Exit(1)
 		}
 		if *forceOwerwrite {
-		outputPath = *output
-		}else {
-			_, err := os.Stat(*output) 
+			outputPath = *output
+		} else {
+			_, err := os.Stat(*output)
 			if err == nil {
 				ui.Error("Output file already exists. Use --force flag to overwrite.")
 				os.Exit(1)
@@ -69,7 +73,23 @@ func main() {
 		}
 	}
 
-	ui.Info(outputPath)
+	ui.Info("output path: "+outputPath)
+
+	err = render.RenderMac(render.MacOptions{
+		InputPath:      inputPath,
+		OutputPath:     outputPath,
+		BackgroundPath: "internal/assets/backgrounds/bg-1.jpg",
+		Width:          1920,
+		Height:         1080,
+		Force:          *forceOwerwrite,
+	})
+
+	if err != nil {
+		ui.Error("Render failed: " + err.Error())
+		os.Exit(1)
+	}
+
+	ui.Success("Output written to " + outputPath)
 
 }
 
