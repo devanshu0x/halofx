@@ -25,7 +25,7 @@ func RenderMac(options MacOptions) error {
 
 	filter:= fmt.Sprintf(
 		"[0:v]scale=%d:%d[bg];"+
-			"[1:v]scale=iw:ih[win];"+
+			"[1:v]scale=1600:900:force_original_aspect_ratio=decrease[win];"+
 			"[bg][win]overlay=(W-w)/2:(H-h)/2",
 		options.Width,
 		options.Height,
