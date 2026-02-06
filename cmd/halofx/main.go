@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/devanshu0x/halofx/internal/mask"
 	"github.com/devanshu0x/halofx/internal/render"
 	"github.com/devanshu0x/halofx/internal/ui"
 )
@@ -40,7 +41,7 @@ func main() {
 		ui.Info("halofx version: " + version)
 		os.Exit(0)
 	}
-	var inputPath ,outputPath string
+	var inputPath, outputPath string
 
 	if *input == "" {
 		ui.Error("Input file is required, specify with -i flag")
@@ -52,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 	inputPath = *input
-	
+
 	if *output == "" {
 		outputPath = fmt.Sprintf("%s_halofx%s", (*input)[:len(*input)-len(filepath.Ext(*input))], filepath.Ext(*input))
 	} else {
@@ -73,14 +74,41 @@ func main() {
 		}
 	}
 
-	ui.Info("output path: "+outputPath)
+	width, height, err := render.GetVideoDimensions(inputPath)
+	if err != nil {
+		ui.Error("Failed to get video dimensions: " + err.Error())
+		os.Exit(1)
+	}
+
+	if width == 0 || height == 0 {
+		ui.Error("Invalid video dimensions")
+		os.Exit(1)
+	}
+	paddingX := 30
+	paddingY := 20
+	adjustedWidth, adjustedHeight := fitInside(width, height, 1920-2*paddingX, 1080-2*paddingY)
+	tmpFile, err := os.CreateTemp("", "halofx-mask-*.png")
+	if err != nil {
+		ui.Error("Failed to create temporary file for mask: " + err.Error())
+		os.Exit(1)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	err = mask.GenerateRoundedMask(tmpFile.Name(), adjustedWidth, adjustedHeight, 16)
+	if err != nil {
+		ui.Error("Failed to generate mask: " + err.Error())
+		os.Exit(1)
+	}
 
 	err = render.RenderMac(render.MacOptions{
 		InputPath:      inputPath,
 		OutputPath:     outputPath,
 		BackgroundPath: "internal/assets/backgrounds/bg-1.jpg",
+		MaskPath:       tmpFile.Name(),
 		Width:          1920,
 		Height:         1080,
+		VideoWidth:     adjustedWidth,
+		VideoHeight:    adjustedHeight,
 		Force:          *forceOwerwrite,
 	})
 
@@ -123,4 +151,23 @@ func validateOutputPath(path string) error {
 		return fmt.Errorf("Output directory is not a valid directory")
 	}
 	return nil
+}
+
+
+func fitInside(srcWidth, srcHeight, maxWidth, maxHeight int) (newWidth, newHeight int) {
+	scaleW := float64(maxWidth) / float64(srcWidth)
+	scaleH := float64(maxHeight) / float64(srcHeight)
+	scale := scaleW
+	if scaleH < scaleW {
+		scale = scaleH
+	}
+
+	// never upscale
+	if scale > 1 {
+		scale = 1
+	}
+
+	newWidth = int(float64(srcWidth) * scale)
+	newHeight = int(float64(srcHeight) * scale)
+	return
 }
