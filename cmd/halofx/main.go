@@ -17,6 +17,7 @@ func main() {
 	input := flag.String("i", "", "input file")
 	output := flag.String("o", "", "output file")
 	showVersion := flag.Bool("v", false, "print version")
+	forceOwerwrite := flag.Bool("force", false, "force overwrite of output file if it exists")
 	flag.Usage = func() {
 		ui.Info("Usage:")
 		ui.Info("  halofx -i <input> -o <output>(optional) [flags]")
@@ -56,7 +57,16 @@ func main() {
 			ui.Error(fmt.Sprintf("Error with output path: %v", err.Error()))
 			os.Exit(1)
 		}
+		if *forceOwerwrite {
 		outputPath = *output
+		}else {
+			_, err := os.Stat(*output) 
+			if err == nil {
+				ui.Error("Output file already exists. Use --force flag to overwrite.")
+				os.Exit(1)
+			}
+			outputPath = *output
+		}
 	}
 
 	ui.Info(outputPath)
