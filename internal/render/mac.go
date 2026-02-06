@@ -30,13 +30,25 @@ func RenderMac(options MacOptions) error {
 	}
 
 	filter := fmt.Sprintf(
-		"[0:v]scale=%d:%d[bg];"+
+		// background
+		"[0:v]scale=%d:%d,format=rgba[bg];"+
+
+			// video
 			"[1:v]scale=%d:%d,format=rgba[win];"+
-			"[2:v]format=ya8,alphaextract,format=gray[mask];"+
+
+			// anti-aliased mask
+			"[2:v]scale=%d:%d,format=rgba,alphaextract,"+
+			"gblur=sigma=0.6:steps=1[mask];"+
+
+			// apply rounded mask
 			"[win][mask]alphamerge[rounded];"+
+
+			// composite
 			"[bg][rounded]overlay=(W-w)/2:(H-h)/2",
 		options.Width,
 		options.Height,
+		options.VideoWidth,
+		options.VideoHeight,
 		options.VideoWidth,
 		options.VideoHeight,
 	)
