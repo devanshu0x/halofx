@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-
 	"github.com/devanshu0x/halofx/internal/mask"
 	"github.com/devanshu0x/halofx/internal/render"
 	"github.com/devanshu0x/halofx/internal/ui"
@@ -16,11 +15,108 @@ var version = "dev"
 
 var videoExtensions = []string{".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".mpeg", ".mpg", ".webm"}
 
+const (
+	DefaultWidth  = 1920
+	DefaultHeight = 1080
+	DefaultRadius = 16
+	DefaultBG     = "internal/assets/backgrounds/bg-1.jpg"
+)
+
+type Config struct {
+	InputPath   string
+	OutputPath  string
+	PaddingX    int
+	PaddingY    int
+	Force       bool
+	ShowVersion bool
+}
+
+
+
 func main() {
+	cfg := parseFlags()
+
+	if cfg.ShowVersion {
+		ui.Info("halofx version: " + version)
+		return
+	}
+
+	if err := run(cfg); err != nil {
+		ui.Error(err.Error())
+		os.Exit(1)
+	}
+}
+
+func run(cfg Config) error {
+	if cfg.InputPath == "" {
+		return fmt.Errorf("input file is required, specify with -i flag")
+	}
+
+	if err := videoFileExists(cfg.InputPath); err != nil {
+		return fmt.Errorf("error with input file: %w", err)
+	}
+
+	outputPath, err := resolveOutputPath(cfg.InputPath, cfg.OutputPath, cfg.Force)
+	if err != nil {
+		return err
+	}
+
+	videoWidth, videoHeight, err := render.GetVideoDimensions(cfg.InputPath)
+	if err != nil {
+		return fmt.Errorf("failed to get video dimensions: %w", err)
+	}
+	if videoWidth == 0 || videoHeight == 0 {
+		return fmt.Errorf("invalid video dimensions")
+	}
+
+	adjustedWidth, adjustedHeight := fitInside(
+		videoWidth,
+		videoHeight,
+		DefaultWidth-2*cfg.PaddingX,
+		DefaultHeight-2*cfg.PaddingY,
+	)
+
+	tmpFile, err := os.CreateTemp("", "halofx-mask-*.png")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary mask file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if err := mask.GenerateRoundedMask(
+		tmpFile.Name(),
+		adjustedWidth,
+		adjustedHeight,
+		DefaultRadius,
+	); err != nil {
+		return fmt.Errorf("failed to generate mask: %w", err)
+	}
+
+	if err := render.RenderMac(render.MacOptions{
+		InputPath:      cfg.InputPath,
+		OutputPath:     outputPath,
+		BackgroundPath: DefaultBG,
+		MaskPath:       tmpFile.Name(),
+		Width:          DefaultWidth,
+		Height:         DefaultHeight,
+		VideoWidth:     adjustedWidth,
+		VideoHeight:    adjustedHeight,
+		Force:          cfg.Force,
+	}); err != nil {
+		return fmt.Errorf("render failed: %w", err)
+	}
+
+	ui.Success("Output written to " + outputPath)
+	return nil
+}
+
+func parseFlags() Config {
 	input := flag.String("i", "", "input file")
 	output := flag.String("o", "", "output file")
 	showVersion := flag.Bool("v", false, "print version")
-	forceOwerwrite := flag.Bool("force", false, "force overwrite of output file if it exists")
+	force := flag.Bool("force", false, "force overwrite of output file")
+	paddingX := flag.Int("px", 50, "horizontal padding around video in pixels")
+	paddingY := flag.Int("py", 40, "vertical padding around video in pixels")
+
 	flag.Usage = func() {
 		ui.Info("Usage:")
 		ui.Info("  halofx -i <input> -o <output>(optional) [flags]")
@@ -30,6 +126,7 @@ func main() {
 		ui.Info("Flags:")
 		flag.PrintDefaults()
 	}
+
 	flag.Parse()
 
 	if flag.NFlag() == 0 {
@@ -37,88 +134,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *showVersion {
-		ui.Info("halofx version: " + version)
-		os.Exit(0)
+	return Config{
+		InputPath:   *input,
+		OutputPath: *output,
+		PaddingX:    *paddingX,
+		PaddingY:    *paddingY,
+		Force:       *force,
+		ShowVersion: *showVersion,
 	}
-	var inputPath, outputPath string
+}
 
-	if *input == "" {
-		ui.Error("Input file is required, specify with -i flag")
-		os.Exit(1)
+func resolveOutputPath(input, output string, force bool) (string, error) {
+	if output == "" {
+		ext := filepath.Ext(input)
+		return fmt.Sprintf("%s_halofx%s", input[:len(input)-len(ext)], ext), nil
 	}
-	err := videoFileExists(*input)
-	if err != nil {
-		ui.Error(fmt.Sprintf("Error with input file: %v", err.Error()))
-		os.Exit(1)
-	}
-	inputPath = *input
 
-	if *output == "" {
-		outputPath = fmt.Sprintf("%s_halofx%s", (*input)[:len(*input)-len(filepath.Ext(*input))], filepath.Ext(*input))
-	} else {
-		err = validateOutputPath(*output)
-		if err != nil {
-			ui.Error(fmt.Sprintf("Error with output path: %v", err.Error()))
-			os.Exit(1)
-		}
-		if *forceOwerwrite {
-			outputPath = *output
-		} else {
-			_, err := os.Stat(*output)
-			if err == nil {
-				ui.Error("Output file already exists. Use --force flag to overwrite.")
-				os.Exit(1)
-			}
-			outputPath = *output
+	if err := validateOutputPath(output); err != nil {
+		return "", err
+	}
+
+	if !force {
+		if _, err := os.Stat(output); err == nil {
+			return "", fmt.Errorf("output file already exists (use --force to overwrite)")
 		}
 	}
 
-	width, height, err := render.GetVideoDimensions(inputPath)
-	if err != nil {
-		ui.Error("Failed to get video dimensions: " + err.Error())
-		os.Exit(1)
-	}
-
-	if width == 0 || height == 0 {
-		ui.Error("Invalid video dimensions")
-		os.Exit(1)
-	}
-	paddingX := 30
-	paddingY := 20
-	adjustedWidth, adjustedHeight := fitInside(width, height, 1920-2*paddingX, 1080-2*paddingY)
-	tmpFile, err := os.CreateTemp("", "halofx-mask-*.png")
-	if err != nil {
-		ui.Error("Failed to create temporary file for mask: " + err.Error())
-		os.Exit(1)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	err = mask.GenerateRoundedMask(tmpFile.Name(), adjustedWidth, adjustedHeight, 16)
-	if err != nil {
-		ui.Error("Failed to generate mask: " + err.Error())
-		os.Exit(1)
-	}
-
-	err = render.RenderMac(render.MacOptions{
-		InputPath:      inputPath,
-		OutputPath:     outputPath,
-		BackgroundPath: "internal/assets/backgrounds/bg-1.jpg",
-		MaskPath:       tmpFile.Name(),
-		Width:          1920,
-		Height:         1080,
-		VideoWidth:     adjustedWidth,
-		VideoHeight:    adjustedHeight,
-		Force:          *forceOwerwrite,
-	})
-
-	if err != nil {
-		ui.Error("Render failed: " + err.Error())
-		os.Exit(1)
-	}
-
-	ui.Success("Output written to " + outputPath)
-
+	return output, nil
 }
 
 func videoFileExists(path string) error {
@@ -127,47 +169,39 @@ func videoFileExists(path string) error {
 		return err
 	}
 	if info.IsDir() {
-		return fmt.Errorf("Path is a directory, not a file")
+		return fmt.Errorf("path is a directory, not a file")
 	}
-	ext := filepath.Ext(path)
-	if slices.Contains(videoExtensions, ext) {
-		return nil
-	}
-	return fmt.Errorf("File is not a supported video format")
-}
-
-func validateOutputPath(path string) error {
-	if filepath.Base(path) == "." || filepath.Base(path) == string(os.PathSeparator) {
-		return fmt.Errorf("Output path cannot be a directory")
-	}
-
-	dir := filepath.Dir(path)
-
-	info, err := os.Stat(dir)
-	if err != nil {
-		return fmt.Errorf("Output directory does not exist")
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("Output directory is not a valid directory")
+	if !slices.Contains(videoExtensions, filepath.Ext(path)) {
+		return fmt.Errorf("file is not a supported video format")
 	}
 	return nil
 }
 
+func validateOutputPath(path string) error {
+	dir := filepath.Dir(path)
 
-func fitInside(srcWidth, srcHeight, maxWidth, maxHeight int) (newWidth, newHeight int) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("output directory does not exist")
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("output directory is not a directory")
+	}
+	return nil
+}
+
+func fitInside(srcWidth, srcHeight, maxWidth, maxHeight int) (int, int) {
 	scaleW := float64(maxWidth) / float64(srcWidth)
 	scaleH := float64(maxHeight) / float64(srcHeight)
+
 	scale := scaleW
 	if scaleH < scaleW {
 		scale = scaleH
 	}
 
-	// never upscale
 	if scale > 1 {
-		scale = 1
+		scale = 1 
 	}
 
-	newWidth = int(float64(srcWidth) * scale)
-	newHeight = int(float64(srcHeight) * scale)
-	return
+	return int(float64(srcWidth) * scale), int(float64(srcHeight) * scale)
 }
