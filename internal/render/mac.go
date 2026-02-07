@@ -32,7 +32,7 @@ func RenderMac(options MacOptions) error {
 
 	filter := fmt.Sprintf(
 		// background
-		"[0:v]scale=%d:%d,format=rgba[bg];"+
+		"[0:v]scale=%d:%d,format=rgba,gblur=sigma=12[bg];"+
 
 			// video
 			"[1:v]scale=%d:%d,format=rgba[win];"+
