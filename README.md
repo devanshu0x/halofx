@@ -6,9 +6,13 @@ This is my first Go project. The goal is mainly to learn Go project structure, F
 
 ---
 
+## Sample Video Output
+https://github.com/user-attachments/assets/82a87541-f984-47f9-9bb4-aecc6266f793
+
 ## What it does
 
 - Renders a video on top of a background
+- Make corners rounded
 - Supports simple frame / mask based layouts
 - Can blur or scale backgrounds
 - Uses FFmpeg filter graphs internally
