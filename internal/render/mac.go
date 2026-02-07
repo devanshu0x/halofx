@@ -19,6 +19,7 @@ type MacOptions struct {
 	VideoHeight    int
 	VideoWidth     int
 	Force          bool
+	FramePath      string
 }
 
 func RenderMac(options MacOptions) error {
@@ -43,8 +44,12 @@ func RenderMac(options MacOptions) error {
 			// apply rounded mask
 			"[win][mask]alphamerge[rounded];"+
 
+			//Frame
+			"[3:v]format=rgba[frame];"+
+
 			// composite
-			"[bg][rounded]overlay=(W-w)/2:(H-h)/2",
+			"[bg][frame]overlay=(W-w)/2:(H-h)/2[bgframe];"+
+			"[bgframe][rounded]overlay=(W-w)/2:(H-h)/2",
 		options.Width,
 		options.Height,
 		options.VideoWidth,
@@ -57,6 +62,7 @@ func RenderMac(options MacOptions) error {
 		"-loop", "1", "-i", options.BackgroundPath,
 		"-i", options.InputPath,
 		"-i", options.MaskPath,
+		"-i", options.FramePath,
 		"-filter_complex",
 		filter,
 		"-shortest",

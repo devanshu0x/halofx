@@ -8,12 +8,12 @@ import (
 	"os"
 )
 
-func GenerateRoundedMask(path string, width, height, radius int) error {
+func GenerateRoundedMask(path string, width, height, radius int,fill color.NRGBA) error {
 	img := image.NewNRGBA(image.Rect(0, 0, width, height))
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			alpha := uint8(255)
+			alpha := fill.A
 
 			// Top-left corner
 			if x < radius && y < radius {
@@ -43,7 +43,7 @@ func GenerateRoundedMask(path string, width, height, radius int) error {
 				}
 			}
 
-			img.SetNRGBA(x, y, color.NRGBA{0, 0, 0, alpha})
+			img.SetNRGBA(x, y, color.NRGBA{R: fill.R, G: fill.G, B: fill.B, A: alpha})
 		}
 	}
 

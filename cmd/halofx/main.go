@@ -3,9 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image/color"
+
+	// "image/color"
 	"os"
 	"path/filepath"
 	"slices"
+
 	"github.com/devanshu0x/halofx/internal/mask"
 	"github.com/devanshu0x/halofx/internal/render"
 	"github.com/devanshu0x/halofx/internal/ui"
@@ -20,6 +24,7 @@ const (
 	DefaultHeight = 1080
 	DefaultRadius = 16
 	DefaultBG     = "internal/assets/backgrounds/bg-1.jpg"
+	DefaultFrameThickness = 12
 )
 
 type Config struct {
@@ -87,8 +92,25 @@ func run(cfg Config) error {
 		adjustedWidth,
 		adjustedHeight,
 		DefaultRadius,
+		color.NRGBA{0, 0, 0, 255},
 	); err != nil {
 		return fmt.Errorf("failed to generate mask: %w", err)
+	}
+
+	frameFile, err := os.CreateTemp("", "halofx-frame-*.png")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary frame file: %w", err)
+	}
+	defer os.Remove(frameFile.Name())
+
+	if err := mask.GenerateRoundedMask(
+		frameFile.Name(),
+		adjustedWidth+2*DefaultFrameThickness,
+		adjustedHeight+2*DefaultFrameThickness,
+		DefaultRadius,
+		color.NRGBA{255, 255, 255, 40},
+	); err != nil {
+		return fmt.Errorf("failed to generate frame: %w", err)
 	}
 
 	if err := render.RenderMac(render.MacOptions{
@@ -101,6 +123,7 @@ func run(cfg Config) error {
 		VideoWidth:     adjustedWidth,
 		VideoHeight:    adjustedHeight,
 		Force:          cfg.Force,
+		FramePath: 	frameFile.Name(),
 	}); err != nil {
 		return fmt.Errorf("render failed: %w", err)
 	}
