@@ -32,8 +32,7 @@ func RenderMac(options MacOptions) error {
 
 	filter := fmt.Sprintf(
 		// background
-		"[0:v]scale=%d:%d,format=rgba,gblur=sigma=12[bg];"+
-
+		"[0:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=rgba,gblur=sigma=12[bg];"+
 			// video
 			"[1:v]scale=%d:%d,format=rgba[win];"+
 
@@ -50,6 +49,8 @@ func RenderMac(options MacOptions) error {
 			// composite
 			"[bg][frame]overlay=(W-w)/2:(H-h)/2[bgframe];"+
 			"[bgframe][rounded]overlay=(W-w)/2:(H-h)/2",
+		options.Width,
+		options.Height,
 		options.Width,
 		options.Height,
 		options.VideoWidth,

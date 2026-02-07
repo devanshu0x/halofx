@@ -123,7 +123,6 @@ func run(cfg Config) error {
 		ui.Error("Invalid background, using default")
 		bgData, _ = resolveBackground(DefaultBG)
 	}
-	ui.Info(fmt.Sprintf("bg size: %d bytes", len(bgData)))
 
 	bgPath, err := writeTempBackground(bgData)
 	if err != nil {
